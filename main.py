@@ -4,44 +4,46 @@ from config import BASE_URL
 import os
 
 
+def search_manga(search_query):
+    manga_response = requests.get(
+        f'{BASE_URL}/manga', params={'title': search_query})
+    return manga_response.json()['data']
+
+
+def get_manga_title(manga):
+    return list(manga['attributes']['title'].values())[0]
+
+
+def select_manga():
+    search_query = input("Enter manga's title: ")
+    manga_data = search_manga(search_query=search_query)
+
+    manga_choices = list(map(get_manga_title, manga_data))
+    questions = [
+        inquirer.List('title', message='Select exact title',
+                      choices=manga_choices)
+    ]
+
+    selected_manga_title = inquirer.prompt(questions)['title']
+    selected_manga_data = list(filter(
+        lambda manga: get_manga_title(
+            manga) == selected_manga_title, manga_data
+    ))[0]
+
+    return selected_manga_title, selected_manga_data['id']
+
+
 class MangaDownloader:
-    def __init__(self, step):
+    def __init__(self, title, id, step):
+        self.title = title
+        self.id = id
         self.step = step
-        self.selected_manga_title = None
-        self.selected_manga_id = None
-
-    def search_manga(self, search_query):
-        manga_response = requests.get(
-            f'{BASE_URL}/manga', params={'title': search_query})
-        return manga_response.json()['data']
-
-    def get_manga_title(self, manga):
-        return list(manga['attributes']['title'].values())[0]
-
-    def select_manga(self):
-        search_query = input("Enter manga's title: ")
-        manga_data = self.search_manga(search_query=search_query)
-
-        manga_choices = list(map(self.get_manga_title, manga_data))
-        questions = [
-            inquirer.List('title', message='Select exact title',
-                          choices=manga_choices)
-        ]
-
-        selected_manga_title = inquirer.prompt(questions)['title']
-        selected_manga_data = list(filter(
-            lambda manga: self.get_manga_title(
-                manga) == selected_manga_title, manga_data
-        ))[0]
-
-        self.selected_manga_title = selected_manga_title
-        self.selected_manga_id = selected_manga_data['id']
 
     def get_chapters(self, limit=100, offset=0):
         chapters_request_params = {
             'limit': limit,
             'offset': offset,
-            'manga': self.selected_manga_id
+            'manga': self.id
         }
 
         chapters_response = requests.get(
@@ -52,14 +54,14 @@ class MangaDownloader:
         if (not chapter_title):
             raise ValueError('Invalid chapter title')
 
-        return os.path.join(os.getcwd(), 'manga', self.selected_manga_title, chapter_title)
+        return os.path.join(os.getcwd(), 'manga', self.title, chapter_title)
 
     def get_chapter_images_data(self, chapter_id):
         chapter_images_response = requests.get(
             f'{BASE_URL}/at-home/server/{chapter_id}')
         return chapter_images_response.json()
 
-    def download_images(self, chapter_id, chapter_path):
+    def download_chapter_images(self, chapter_id, chapter_path):
         os.makedirs(chapter_path)
         chapter_images_data = self.get_chapter_images_data(chapter_id)
 
@@ -89,7 +91,7 @@ class MangaDownloader:
                     continue
 
                 print(f'Download started: "{chapter_title}"')
-                self.download_images(chapter['id'], chapter_path)
+                self.download_chapter_images(chapter['id'], chapter_path)
                 print(f'Downloaded: "{chapter_title}"')
             except Exception as e:
                 print(f'Failed to retrieve a chapter: {e}')
@@ -98,7 +100,6 @@ class MangaDownloader:
         return self.get_chapters(limit=1, offset=0)['total']
 
     def download_manga(self):
-        self.select_manga()
         total_chapters = self.get_chapters_amount()
 
         for i in range(0, total_chapters + self.step, self.step):
@@ -106,9 +107,10 @@ class MangaDownloader:
 
 
 def main():
-    downloader = MangaDownloader(step=100)
-
     try:
+        manga_title, manga_id = select_manga()
+
+        downloader = MangaDownloader(title=manga_title, id=manga_id, step=100)
         downloader.download_manga()
     except KeyboardInterrupt:
         print('\nDownload interrupted')

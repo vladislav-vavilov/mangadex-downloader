@@ -44,10 +44,10 @@ class MangaDownloader:
         self.id = id
         self.step = step
 
-    def get_chapters(self, limit=100, offset=0):
+    def get_chapters(self, offset=0):
         '''Request chunk of chapters'''
         chapters_request_params = {
-            'limit': limit,
+            'limit': self.step,
             'offset': offset,
             'manga': self.id,
             'translatedLanguage[]': self.language
@@ -111,9 +111,11 @@ class MangaDownloader:
 
         '''Get all chapters by chunks'''
         chapters_data = chapters['data']
-        for i in range(0, total_chapters + self.step, self.step):
+        # Range starts with self.step instead of 0 because first chunk (which is equal to step) was fetched above
+        for i in range(self.step, total_chapters + self.step, self.step):
             chapters_data.extend(self.get_chapters(offset=i)['data'])
 
+        print(len(chapters_data))
         self.download_chapters(chapters_data)
 
 

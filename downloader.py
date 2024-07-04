@@ -21,8 +21,12 @@ class MangaDownloader:
 
         chapters_response = requests.get(
             f'{BASE_URL}/chapter', params=chapters_request_params)
+        if chapters_response.ok:
+            return chapters_response.json()
 
-        return chapters_response.json()
+        raise Exception(
+            f'Unable to get chapters from {offset} to {offset + self.step}'
+        )
 
     def get_chapter_path(self, chapter_title):
         '''Get chapter's path in system'''
@@ -35,7 +39,10 @@ class MangaDownloader:
         '''Get chapter's images data'''
         chapter_images_response = requests.get(
             f'{BASE_URL}/at-home/server/{chapter_id}')
-        return chapter_images_response.json()
+        if (chapter_images_response.ok):
+            return chapter_images_response.json()
+
+        raise Exception(f'Unable to get images for chapter {chapter_id}')
 
     def download_chapter_images(self, chapter_id, chapter_path):
         '''Request chapter's images and download it'''
@@ -48,8 +55,11 @@ class MangaDownloader:
             image_url = f'{base_url}/data/{hash}/{image}'
             image_response = requests.get(image_url)
 
-            with open(f'{chapter_path}/{image}', 'wb') as file:
-                file.write(image_response.content)
+            if (image_response.ok):
+                with open(f'{chapter_path}/{image}', 'wb') as file:
+                    file.write(image_response.content)
+            else:
+                raise Exception(f'Unable to download image {image}')
 
     def download_chapters(self, chapters):
         '''Download all chapters'''
@@ -67,7 +77,7 @@ class MangaDownloader:
                 self.download_chapter_images(chapter['id'], chapter_path)
                 print(f'Downloaded: "{chapter_title}"')
             except Exception as e:
-                print(f'Failed to retrieve a chapter: {e}')
+                print(f'Error: {e}')
 
     def download_manga(self):
         '''Download all manga's chapters'''
@@ -81,5 +91,4 @@ class MangaDownloader:
         for i in range(self.step, total_chapters + self.step, self.step):
             chapters_data.extend(self.get_chapters(offset=i)['data'])
 
-        print(len(chapters_data))
         self.download_chapters(chapters_data)
